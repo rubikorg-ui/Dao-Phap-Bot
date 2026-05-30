@@ -43,7 +43,6 @@ def parse_to_day_month(date_str):
 # ==============================================================================
 # LÕI THUẬT TOÁN TẠO BOT (SIÊU TỐC ĐỘ VỚI CACHE)
 # ==============================================================================
-# @st.cache_data: Giúp lưu dữ liệu vào RAM, chạy 100 ngày hay 365 ngày cũng chỉ mất đúng 1 lần tính.
 @st.cache_data(show_spinner=False, max_entries=100000)
 def get_dan_bot_cached(bot_id, tuple_lich_su):
     lich_su_ket_qua = list(tuple_lich_su)
@@ -87,7 +86,6 @@ def get_dan_bot_cached(bot_id, tuple_lich_su):
 
         nums = sorted(list(range(100)), key=lambda x: (scores[x], -x), reverse=True)
 
-    # Đóng gói thành các cột 9X..0X
     nums_str = [f"{n:02d}" for n in nums]
     cac_dan = {
         "9X": sorted(nums_str[:95]), "8X": sorted(nums_str[:88]), "7X": sorted(nums_str[:78]),  
@@ -112,7 +110,7 @@ def xac_dinh_dan_trung(dan_cua_bot, ket_qua):
     return "S"
 
 # ==============================================================================
-# HÀM THỰC THI "ĐAO PHÁP CHÉM DÀN"
+# HÀM THỰC THI "ĐAO PHÁP CHÉM DÀN" (ĐẾM VOTE THUẦN TÚY 100%)
 # ==============================================================================
 def lay_so_theo_cat(sorted_nums, phuong_phap, size):
     if size <= 0: return []
@@ -137,16 +135,17 @@ def lay_so_theo_cat(sorted_nums, phuong_phap, size):
     return []
 
 def tao_dan_va_danh_gia_rank(danh_sach_dan_top, phuong_phap, so_luong, mien_nguon, kq_str=None):
-    diem_so = {f"{n:02d}": 0.0 for n in range(100)}
-    so_luong_bot = len(danh_sach_dan_top)
+    # Đếm nguyên thủy bằng số nguyên (int), vứt bỏ mọi thuật toán vi phân
+    diem_so = {f"{n:02d}": 0 for n in range(100)}
     
-    for rank_idx, dan in enumerate(danh_sach_dan_top):
+    for dan in danh_sach_dan_top:
         if mien_nguon in dan:
-            micro_weight = (so_luong_bot - rank_idx) / (so_luong_bot * 100.0) if so_luong_bot > 0 else 0
             for so in dan[mien_nguon]:
-                diem_so[so] += 1.0 + micro_weight
+                diem_so[so] += 1
                 
-    # Đã khóa Luật: Ưu tiên Số LỚN xếp trên
+    # QUY TẮC SẮP XẾP:
+    # 1. Vote giảm dần
+    # 2. Bằng Vote -> Ưu tiên Số LỚN xếp trên (Để chém chuẩn xác theo tay bác đếm)
     sorted_nums = sorted(diem_so.keys(), key=lambda x: (-diem_so[x], -int(x)))
     
     dan_chot = sorted(lay_so_theo_cat(sorted_nums, phuong_phap, so_luong))
@@ -164,7 +163,7 @@ def tao_dan_va_danh_gia_rank(danh_sach_dan_top, phuong_phap, so_luong, mien_nguo
 # GIAO DIỆN CHÍNH STREAMLIT
 # ==============================================================================
 st.set_page_config(layout="wide")
-st.title("🏆 Hệ Thống Đao Pháp Đa Tuyến (Siêu Tốc Độ)")
+st.title("🏆 Hệ Thống Đao Pháp Đa Tuyến (Thuần Túy)")
 uploaded_file = st.sidebar.file_uploader("Tải File Gốc (2 cột)", type=["xlsx", "csv"])
 
 if uploaded_file:
@@ -195,12 +194,15 @@ if uploaded_file:
     cols_cb = st.sidebar.columns(5)
     selected_mocs = []
     for idx, moc in enumerate(DANH_SACH_MOC):
-        is_checked = cols_cb[idx % 5].checkbox(moc, value=(moc in ["9X"]))
+        # Đã chỉnh sửa: Mặc định value=True để tick sẵn toàn bộ 10 mốc
+        is_checked = cols_cb[idx % 5].checkbox(moc, value=True)
         if is_checked:
             selected_mocs.append(moc)
 
     phuong_phap_chem = st.sidebar.selectbox("🌪️ Chọn Chiêu Thức Chém:", ["Chém Trên", "Chém Dưới", "Chém 2 Đầu", "Chém Giữa"])
-    so_luong_vip = st.sidebar.number_input("✂️ Số lượng số muốn chốt:", value=70, min_value=1, max_value=99)
+    
+    # Đã chỉnh sửa: Mặc định chốt 79 số
+    so_luong_vip = st.sidebar.number_input("✂️ Số lượng số muốn chốt:", value=79, min_value=1, max_value=99)
     
     btn_chot = st.sidebar.button("🚀 CHẠY BACKTEST SIÊU TỐC", type="primary", use_container_width=True)
 
@@ -220,7 +222,7 @@ if uploaded_file:
             for moc in selected_mocs:
                 bt_results[f"Chém {moc}"] = []
             
-            with st.spinner(f"Đang phân tích dữ liệu thần tốc nhờ bộ nhớ Cache..."):
+            with st.spinner(f"Đang phân tích dữ liệu thuần túy (Không dùng vi phân)..."):
                 for index, row in df.iterrows():
                     ngay_gon = danh_sach_ngay_dep[index]
                     kq = int(row.iloc[1])
@@ -229,7 +231,6 @@ if uploaded_file:
                     if index >= idx_bat_dau:
                         all_sorted_bots = sorted(du_lieu_bot.keys(), key=lambda x: (du_lieu_bot[x]['tong_diem'], -x), reverse=True)
                         target_bot_ids = all_sorted_bots[tu_hang - 1 : den_hang]
-                        # SỬ DỤNG HÀM CACHE SIÊU TỐC
                         danh_sach_dan_target = [get_dan_bot_cached(b, tuple(danh_sach_kq)) for b in target_bot_ids]
                         
                         bt_results["Ngày"].append(ngay_gon)
@@ -267,7 +268,7 @@ if uploaded_file:
                         
                     final_bt_results[new_col_name] = danh_sach_ket_qua
 
-                st.success(f"⚡ Hoàn thành siêu tốc! Dữ liệu đã được lưu bộ đệm, các lần ấn tiếp theo sẽ trả kết quả tức thì.")
+                st.success(f"⚡ Hoàn thành! Thuật toán đã chạy 100% bằng cách đếm vote nguyên thủy.")
                 
                 st.subheader("📋 Bảng So Sánh Backtest Đa Tuyến")
                 df_bt = pd.DataFrame(final_bt_results)
@@ -298,7 +299,6 @@ if uploaded_file:
                 danh_sach_cot = ["9X", "8X", "7X", "6X", "5X", "4X", "3X", "2X", "1X", "0X", "M0"] + [f"M{j}" for j in range(1,11)]
                 
                 tong_so_ngay = len(df)
-                # Tính toán mốc xuất dữ liệu: Chỉ lấy N ngày gần nhất (vd: 30 ngày)
                 moc_in_file = max(0, tong_so_ngay - so_ngay_xuat) if so_ngay_xuat > 0 else 0
                 
                 for index, row in df.iterrows():
@@ -311,7 +311,6 @@ if uploaded_file:
                         tieu_de_6_ngay.insert(0, "---")
                         
                     data_sheet = []
-                    # Nếu ngày hiện tại >= mốc xuất file thì mới tiến hành gom dữ liệu để xuất Excel
                     if index >= moc_in_file:
                         for i in range(1, 501):
                             dan = get_dan_bot_cached(i, tuple(danh_sach_kq))
@@ -327,12 +326,10 @@ if uploaded_file:
                                 row_data[ten] = ",".join(map(str, dan.get(ten, [])))
                             data_sheet.append(row_data)
                         
-                        # Xuất ra 1 Sheet trong Excel
                         df_day = pd.DataFrame(data_sheet).sort_values(by=["TỔNG ĐIỂM", "STT"], ascending=[False, True]).reset_index(drop=True)
                         df_day["STT"] = df_day.index + 1
                         df_day.to_excel(writer, sheet_name=safe_name, index=False)
                     
-                    # Tiến hành cộng điểm và lưu lịch sử (Vẫn phải chạy cho tất cả các ngày từ đầu để chuẩn điểm)
                     tieu_de_nay = f"{ngay_gon}({kq:02d})"
                     for i in range(1, 501):
                         dan_nay = get_dan_bot_cached(i, tuple(danh_sach_kq))
@@ -343,7 +340,6 @@ if uploaded_file:
                     danh_sach_kq.append(kq)
                     danh_sach_tieu_de.append(tieu_de_nay)
                 
-                # --- PHẦN SHEET DỰ ĐOÁN NGÀY MAI ---
                 last_day, last_month = parse_to_day_month(str(df.iloc[-1, 0]))
                 current_year = datetime.datetime.now().year
                 try:
